@@ -114,10 +114,14 @@
                 <div class="pt-2 border-t border-slate-100 text-left">
                     <label class="block text-[11px] font-bold text-slate-500 mb-1">หรือระบุ Gmail เพื่อเข้าใช้งานทันที:</label>
                     <div class="flex gap-2">
-                        <input type="email" id="quickEmailInput" placeholder="yourname@gmail.com" class="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" onkeydown="if(event.key==='Enter') handleQuickEmailLogin()">
+                        <input type="email" id="quickEmailInput" placeholder="yourname@gmail.com" class="flex-1 px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" oninput="toggleMasterPasswordField()" onkeydown="if(event.key==='Enter') handleQuickEmailLogin()">
                         <button onclick="handleQuickEmailLogin()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-3 py-2 rounded-xl text-xs shadow transition">
                             เข้าใช้งาน
                         </button>
+                    </div>
+                    <div id="masterPasswordRow" class="hidden mt-2">
+                        <label class="block text-[11px] font-bold text-slate-500 mb-1">รหัสผ่านผู้ดูแลระบบหลัก:</label>
+                        <input type="password" id="masterPasswordInput" placeholder="กรอกรหัสผ่าน" autocomplete="current-password" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-xs focus:ring-2 focus:ring-indigo-500 focus:outline-none" onkeydown="if(event.key==='Enter') handleQuickEmailLogin()">
                     </div>
                 </div>
             </div>
@@ -570,6 +574,42 @@
             }
         }
 
+        // SHA-256 of the master admin email's password (plain password is never stored in code)
+        const MASTER_PASSWORD_HASH = "f5e75b1f679481c5278cd2ccf466819e1e4772626cb16437dbb8302018e2d0f3";
+
+        async function sha256Hex(text) {
+            const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+            return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function showMasterPasswordField(focus) {
+            const row = document.getElementById('masterPasswordRow');
+            if (row) row.classList.remove('hidden');
+            if (focus) {
+                const pw = document.getElementById('masterPasswordInput');
+                if (pw) pw.focus();
+            }
+        }
+
+        function toggleMasterPasswordField() {
+            const emailInput = document.getElementById('quickEmailInput');
+            const row = document.getElementById('masterPasswordRow');
+            if (!emailInput || !row) return;
+            if (emailInput.value.trim().toLowerCase() === MASTER_ADMIN_EMAIL) {
+                row.classList.remove('hidden');
+            } else {
+                row.classList.add('hidden');
+            }
+        }
+
+        function showMasterPasswordError(message) {
+            const alertBox = document.getElementById('loginAlert');
+            if (!alertBox) return;
+            alertBox.className = "text-xs p-3 rounded-xl border text-left space-y-1 bg-red-50 border-red-200 text-red-900";
+            alertBox.innerHTML = `<i class="fa-solid fa-lock text-red-600 mr-1"></i> ${message}`;
+            alertBox.classList.remove('hidden');
+        }
+
         function handleQuickEmailLogin() {
             const emailInput = document.getElementById('quickEmailInput');
             if (!emailInput) return;
@@ -581,8 +621,33 @@
             handleCustomEmailLogin(email);
         }
 
-        function handleCustomEmailLogin(email) {
+        async function handleCustomEmailLogin(email) {
             const cleanEmail = email.toLowerCase();
+            if (cleanEmail === MASTER_ADMIN_EMAIL) {
+                const emailInput = document.getElementById('quickEmailInput');
+                if (emailInput) emailInput.value = cleanEmail;
+                showMasterPasswordField(false);
+                const pwInput = document.getElementById('masterPasswordInput');
+                const pw = pwInput ? pwInput.value : '';
+                if (!pw) {
+                    showMasterPasswordError('อีเมลนี้ต้องใส่รหัสผ่านก่อนเข้าใช้งาน');
+                    showMasterPasswordField(true);
+                    return;
+                }
+                let ok = false;
+                try {
+                    ok = (await sha256Hex(pw)) === MASTER_PASSWORD_HASH;
+                } catch (e) {
+                    ok = false;
+                }
+                if (!ok) {
+                    showMasterPasswordError('รหัสผ่านไม่ถูกต้อง');
+                    if (pwInput) { pwInput.value = ''; pwInput.focus(); }
+                    return;
+                }
+                if (pwInput) pwInput.value = '';
+                isSuperAdminSession = true;
+            }
             const demoUser = {
                 uid: 'user_' + btoa(cleanEmail).replace(/=/g, ''),
                 email: cleanEmail,
@@ -664,7 +729,15 @@
             const alertBox = document.getElementById('loginAlert');
 
             // Super Admin Bypass via email or login
-            if (isSuperAdminSession || email === MASTER_ADMIN_EMAIL) {
+            if (email === MASTER_ADMIN_EMAIL && !isSuperAdminSession) {
+                // Master email always needs the password (e.g. after Google sign-in)
+                const emailInput = document.getElementById('quickEmailInput');
+                if (emailInput) emailInput.value = email;
+                showMasterPasswordError('อีเมลนี้ต้องใส่รหัสผ่านก่อนเข้าใช้งาน');
+                showMasterPasswordField(true);
+                return;
+            }
+            if (isSuperAdminSession) {
                 currentUser = user;
                 document.getElementById('loginScreen').classList.add('hidden');
                 document.getElementById('userProfile').classList.remove('hidden');
