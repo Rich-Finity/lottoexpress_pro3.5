@@ -532,6 +532,8 @@
         userApprovals[MASTER_ADMIN_EMAIL] = { status: 'APPROVED', date: new Date().toISOString() };
         // Pre-approve immabow31@gmail.com
         userApprovals['immabow31@gmail.com'] = { status: 'APPROVED', date: new Date().toISOString() };
+        // Pre-approve ologhosttv@gmail.com
+        userApprovals['ologhosttv@gmail.com'] = { status: 'APPROVED', date: new Date().toISOString() };
         localStorage.setItem('lottery_approved_users', JSON.stringify(userApprovals));
 
         // Netlify / Static Host Route Warmup Check
